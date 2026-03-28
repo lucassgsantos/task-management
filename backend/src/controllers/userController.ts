@@ -1,85 +1,67 @@
-import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import db, { uuidv4 } from '../config/database';
-import { User } from '../models/User';
+import { Request, Response } from 'express';
+import { asyncHandler } from '../lib/asyncHandler';
+import { createAuthToken } from '../lib/authToken';
+import { conflict, notFound, unauthorized } from '../lib/errors';
+import { userRepository } from '../repositories/userRepository';
+import { validateLoginInput, validateRegisterInput } from '../validation/auth';
 
-export const register = async (req: Request, res: Response) => {
-  try {
-    const { email, name, password } = req.body;
+export const register = asyncHandler(async (req: Request, res: Response) => {
+  const input = validateRegisterInput(req.body);
+  const existingUser = userRepository.findByEmail(input.email);
 
-    if (!email || !name || !password) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-    if (existingUser) {
-      return res.status(409).json({ error: 'Email already exists' });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const id = uuidv4();
-
-    db.prepare(
-      'INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)'
-    ).run(id, email, name, hashedPassword);
-
-    const user = db.prepare('SELECT id, email, name, created_at FROM users WHERE id = ?').get(id) as any;
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
-
-    res.status(201).json({
-      user: { id: user.id, email: user.email, name: user.name },
-      token,
-    });
-  } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  if (existingUser) {
+    throw conflict('Já existe uma conta com esse e-mail.', 'EMAIL_IN_USE');
   }
-};
 
-export const login = async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body;
+  const passwordHash = await bcrypt.hash(input.password, 10);
+  const user = userRepository.create({
+    email: input.email,
+    name: input.name,
+    passwordHash,
+  });
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+  res.status(201).json({
+    user,
+    token: createAuthToken(user.id),
+  });
+});
 
-    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as User | undefined;
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+export const login = asyncHandler(async (req: Request, res: Response) => {
+  const input = validateLoginInput(req.body);
+  const user = userRepository.findByEmail(input.email);
 
-    const passwordMatch = await bcrypt.compare(password, user.password_hash);
-
-    if (!passwordMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
-
-    res.json({
-      user: { id: user.id, email: user.email, name: user.name },
-      token,
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  if (!user) {
+    throw unauthorized('E-mail ou senha inválidos.', 'INVALID_CREDENTIALS');
   }
-};
 
-export const getProfile = async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId;
+  const passwordMatches = await bcrypt.compare(
+    input.password,
+    user.passwordHash,
+  );
 
-    const user = db.prepare('SELECT id, email, name, created_at FROM users WHERE id = ?').get(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json(user);
-  } catch (error) {
-    console.error('Get profile error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  if (!passwordMatches) {
+    throw unauthorized('E-mail ou senha inválidos.', 'INVALID_CREDENTIALS');
   }
-};
+
+  const publicUser = userRepository.findPublicById(user.id);
+
+  if (!publicUser) {
+    throw notFound('Usuário não encontrado.', 'USER_NOT_FOUND');
+  }
+
+  res.json({
+    user: publicUser,
+    token: createAuthToken(publicUser.id),
+  });
+});
+
+export const getProfile = asyncHandler(async (req: Request, res: Response) => {
+  const user = userRepository.findPublicById(req.userId as string);
+
+  if (!user) {
+    throw notFound('Usuário não encontrado.', 'USER_NOT_FOUND');
+  }
+
+  res.json(user);
+});

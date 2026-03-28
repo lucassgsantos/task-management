@@ -1,86 +1,138 @@
-import { useState } from 'react';
-import { authService } from '../services/api';
-import { storeAuth } from '../utils/auth';
-import '../styles/auth.css';
+import { FormEvent, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import AuthLayout from '../components/AuthLayout';
+import { useAuth } from '../contexts/AuthContext';
+import { extractApiError } from '../services/api';
 
-interface RegisterPageProps {
-  onSwitchPage: () => void;
-  onRegister: () => void;
-}
-
-function RegisterPage({ onSwitchPage, onRegister }: RegisterPageProps) {
-  const [email, setEmail] = useState('');
+function RegisterPage() {
+  const navigate = useNavigate();
+  const { register } = useAuth();
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
 
-    if (password !== passwordConfirm) {
-      setError('Senhas não conferem');
+    if (password.trim().length < 8) {
+      setError('Use uma senha com pelo menos 8 caracteres.');
       return;
     }
 
-    setLoading(true);
+    if (password !== passwordConfirm) {
+      setError('As senhas precisam ser iguais.');
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
-      const response = await authService.register(email, name, password);
-      storeAuth(response.data.token, response.data.user);
-      onRegister();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao registrar');
+      await register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
+      navigate('/tasks', { replace: true });
+    } catch (submitError) {
+      setError(extractApiError(submitError).error);
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="auth-container">
-      <div className="auth-form">
-        <h1>Registrar</h1>
-        <form onSubmit={handleSubmit}>
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            type="text"
-            placeholder="Nome"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Senha"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Confirmar Senha"
-            value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
-            required
-          />
-          <button type="submit" disabled={loading}>
-            {loading ? 'Carregando...' : 'Registrar'}
-          </button>
-        </form>
-        {error && <p className="error">{error}</p>}
-        <p>
-          Já tem conta? <button type="button" onClick={onSwitchPage} className="link-button">Fazer login</button>
+    <AuthLayout
+      badge="Comece com clareza"
+      title="Crie um espaco de trabalho que da vontade de usar"
+      description="Configure seu acesso e acompanhe tarefas com uma interface leve, responsiva e pronta para demonstracao."
+      highlights={[
+        'Resumo rapido do que esta pendente, em andamento e concluido.',
+        'Edicao inline para ajustar tarefas sem perder contexto.',
+        'Design consistente para web desktop e mobile.',
+      ]}
+      footer={
+        <p className="auth-footer-text">
+          Ja tem conta? <Link to="/login">Fazer login</Link>
         </p>
+      }
+    >
+      <div className="auth-form-header">
+        <h2>Criar conta</h2>
+        <p>Leva menos de um minuto para ativar seu painel.</p>
       </div>
-    </div>
+
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label htmlFor="register-name">Nome</label>
+          <input
+            id="register-name"
+            type="text"
+            autoComplete="name"
+            placeholder="Seu nome"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
+        </div>
+
+        <div className="auth-field">
+          <label htmlFor="register-email">E-mail</label>
+          <input
+            id="register-email"
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            placeholder="voce@empresa.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </div>
+
+        <div className="auth-field">
+          <div className="auth-field-heading">
+            <label htmlFor="register-password">Senha</label>
+            <span>Use ao menos 8 caracteres</span>
+          </div>
+          <input
+            id="register-password"
+            type="password"
+            autoComplete="new-password"
+            placeholder="Crie uma senha forte"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </div>
+
+        <div className="auth-field">
+          <label htmlFor="register-password-confirm">Confirmar senha</label>
+          <input
+            id="register-password-confirm"
+            type="password"
+            autoComplete="new-password"
+            placeholder="Repita a senha"
+            value={passwordConfirm}
+            onChange={(event) => setPasswordConfirm(event.target.value)}
+            required
+          />
+        </div>
+
+        {error && (
+          <div className="auth-alert" role="alert">
+            {error}
+          </div>
+        )}
+
+        <button className="auth-submit" type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Criando conta...' : 'Criar meu painel'}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }
 

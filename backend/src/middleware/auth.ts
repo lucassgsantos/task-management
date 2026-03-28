@@ -1,26 +1,27 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
+import { NextFunction, Request, Response } from 'express';
+import { verifyAuthToken } from '../lib/authToken';
+import { unauthorized } from '../lib/errors';
 
-declare global {
-  namespace Express {
-    interface Request {
-      userId?: string;
-    }
+export const authMiddleware = (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    return next(
+      unauthorized('Faça login para acessar este recurso.', 'AUTH_REQUIRED'),
+    );
   }
-}
 
-export const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+  const token = authHeader.replace('Bearer ', '').trim();
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret') as { userId: string };
-    req.userId = decoded.userId;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
+    const payload = verifyAuthToken(token);
+    req.userId = payload.userId;
+    return next();
+  } catch {
+    return next(unauthorized('Sua sessão é inválida.', 'INVALID_TOKEN'));
   }
 };

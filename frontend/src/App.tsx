@@ -1,34 +1,70 @@
-import './styles/global.css';
-import { useEffect, useState } from 'react';
-import { getStoredToken, isAuthenticated } from './utils/auth';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
+import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import TasksPage from './pages/TasksPage';
+import './styles/global.css';
 
-type PageType = 'login' | 'register' | 'tasks';
+function SessionRedirect() {
+  const { isAuthenticated, isBootstrapping } = useAuth();
+  const location = useLocation();
 
-function App() {
-  const [currentPage, setCurrentPage] = useState<PageType>('login');
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(false);
-    if (!isAuthenticated()) {
-      setCurrentPage('login');
-    } else {
-      setCurrentPage('tasks');
-    }
-  }, []);
-
-  if (loading) {
-    return <div className="container"><p>Carregando...</p></div>;
+  if (isBootstrapping) {
+    return (
+      <div className="screen-state" role="status" aria-live="polite">
+        <div className="screen-state__card">
+          <span className="screen-state__eyebrow">Task Flow</span>
+          <h1>Preparando seu painel</h1>
+          <p>
+            Estamos conferindo sua sessão e organizando o que importa agora.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
+    <Navigate
+      replace
+      to={isAuthenticated ? '/tasks' : '/login'}
+      state={{ from: location.pathname }}
+    />
+  );
+}
+
+function App() {
+  return (
     <div className="app">
-      {currentPage === 'login' && <LoginPage onSwitchPage={() => setCurrentPage('register')} onLogin={() => setCurrentPage('tasks')} />}
-      {currentPage === 'register' && <RegisterPage onSwitchPage={() => setCurrentPage('login')} onRegister={() => setCurrentPage('tasks')} />}
-      {currentPage === 'tasks' && <TasksPage onLogout={() => { setCurrentPage('login'); }} />}
+      <Routes>
+        <Route path="/" element={<SessionRedirect />} />
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <RegisterPage />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/tasks"
+          element={
+            <ProtectedRoute>
+              <TasksPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate replace to="/" />} />
+      </Routes>
     </div>
   );
 }

@@ -1,21 +1,31 @@
-export interface User {
+export interface UserRecord {
   id: string;
   email: string;
   name: string;
-  password_hash: string;
-  created_at: Date;
-  updated_at: Date;
+  passwordHash: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface UserRequest {
+export interface PublicUser {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface RegisterInput {
   email: string;
   name: string;
   password: string;
 }
 
-export interface UserResponse {
-  id: string;
+export interface LoginInput {
   email: string;
-  name: string;
-  created_at: Date;
+  password: string;
+}
+
+export interface AuthResponse {
+  user: PublicUser;
+  token: string;
 }

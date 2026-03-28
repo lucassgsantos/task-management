@@ -1,86 +1,51 @@
 import { Request, Response } from 'express';
-import db, { uuidv4 } from '../config/database';
+import { asyncHandler } from '../lib/asyncHandler';
+import { notFound } from '../lib/errors';
+import { taskRepository } from '../repositories/taskRepository';
+import {
+  validateCreateTaskInput,
+  validateUpdateTaskInput,
+} from '../validation/tasks';
 
-export const getTasks = async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId;
+export const getTasks = asyncHandler(async (req: Request, res: Response) => {
+  const tasks = taskRepository.listByUser(req.userId as string);
+  res.json(tasks);
+});
 
-    const tasks = db.prepare(
-      'SELECT id, title, description, completed, created_at, updated_at FROM tasks WHERE user_id = ? ORDER BY created_at DESC'
-    ).all(userId);
+export const createTask = asyncHandler(async (req: Request, res: Response) => {
+  const input = validateCreateTaskInput(req.body);
+  const task = taskRepository.create(req.userId as string, input);
 
-    const mapped = (tasks as any[]).map(t => ({ ...t, completed: !!t.completed }));
-    res.json(mapped);
-  } catch (error) {
-    console.error('Get tasks error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  res.status(201).json(task);
+});
+
+export const updateTask = asyncHandler(async (req: Request, res: Response) => {
+  const input = validateUpdateTaskInput(req.body);
+  const task = taskRepository.findByIdForUser(
+    req.params.id,
+    req.userId as string,
+  );
+
+  if (!task) {
+    throw notFound('Tarefa não encontrada.', 'TASK_NOT_FOUND');
   }
-};
 
-export const createTask = async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId;
-    const { title, description } = req.body;
+  const updatedTask = taskRepository.update(task, input);
 
-    if (!title) {
-      return res.status(400).json({ error: 'Title is required' });
-    }
+  res.json(updatedTask);
+});
 
-    const id = uuidv4();
-    db.prepare(
-      'INSERT INTO tasks (id, user_id, title, description, completed) VALUES (?, ?, ?, ?, 0)'
-    ).run(id, userId, title, description || null);
+export const deleteTask = asyncHandler(async (req: Request, res: Response) => {
+  const task = taskRepository.findByIdForUser(
+    req.params.id,
+    req.userId as string,
+  );
 
-    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
-    res.status(201).json({ ...task, completed: !!task.completed });
-  } catch (error) {
-    console.error('Create task error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  if (!task) {
+    throw notFound('Tarefa não encontrada.', 'TASK_NOT_FOUND');
   }
-};
 
-export const updateTask = async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId;
-    const { id } = req.params;
-    const { title, description, completed } = req.body;
+  taskRepository.delete(task.id);
 
-    const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
-    if (!existing || existing.user_id !== userId) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    const newTitle = title !== undefined ? title : existing.title;
-    const newDescription = description !== undefined ? description : existing.description;
-    const newCompleted = completed !== undefined ? (completed ? 1 : 0) : existing.completed;
-
-    db.prepare(
-      "UPDATE tasks SET title = ?, description = ?, completed = ?, updated_at = datetime('now') WHERE id = ?"
-    ).run(newTitle, newDescription, newCompleted, id);
-
-    const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
-    res.json({ ...task, completed: !!task.completed });
-  } catch (error) {
-    console.error('Update task error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-export const deleteTask = async (req: Request, res: Response) => {
-  try {
-    const userId = req.userId;
-    const { id } = req.params;
-
-    const existing = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as any;
-    if (!existing || existing.user_id !== userId) {
-      return res.status(404).json({ error: 'Task not found' });
-    }
-
-    db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
-
-    res.json({ message: 'Task deleted successfully' });
-  } catch (error) {
-    console.error('Delete task error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
+  res.json({ message: 'Tarefa removida com sucesso.' });
+});

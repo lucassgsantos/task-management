@@ -1,18 +1,30 @@
-export const getStoredToken = () => localStorage.getItem('token');
+import { AuthSession } from '../types';
 
-export const getStoredUser = () => {
-  const user = localStorage.getItem('user');
-  return user ? JSON.parse(user) : null;
+export const AUTH_STORAGE_KEY = 'task-flow.session';
+
+export const getStoredSession = (): AuthSession | null => {
+  const rawValue = localStorage.getItem(AUTH_STORAGE_KEY);
+
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawValue) as AuthSession;
+  } catch {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    return null;
+  }
 };
 
-export const storeAuth = (token: string, user: any) => {
-  localStorage.setItem('token', token);
-  localStorage.setItem('user', JSON.stringify(user));
+export const getStoredToken = () => {
+  return getStoredSession()?.token ?? null;
 };
 
-export const clearAuth = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+export const storeSession = (session: AuthSession) => {
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
 };
 
-export const isAuthenticated = () => !!getStoredToken();
+export const clearStoredSession = () => {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+};

@@ -1,24 +1,29 @@
-export interface Task {
+export interface TaskRecord {
   id: string;
-  user_id: string;
+  userId: string;
   title: string;
-  description?: string;
+  description: string | null;
   completed: boolean;
-  created_at: Date;
-  updated_at: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface TaskRequest {
+export interface TaskDto {
+  id: string;
   title: string;
-  description?: string;
+  description: string | null;
+  completed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateTaskInput {
+  title: string;
+  description: string | null;
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string | null;
   completed?: boolean;
-}
-
-export interface TaskResponse {
-  id: string;
-  title: string;
-  description?: string;
-  completed: boolean;
-  created_at: Date;
-  updated_at: Date;
 }
